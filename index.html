@@ -1,0 +1,124 @@
+<script>
+const map = L.map('map').setView([-25, 135], 4);
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', { attribution: 'OSM' }).addTo(map);
+
+proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs");
+
+// ✅ Change rasterFiles to hosted COG URLs (your GitHub Pages URL)
+const rasterFiles = [
+    'https://irisbenj.github.io/acid-cog.tif',
+    'https://irisbenj.github.io/log-cog.tif',
+    'https://irisbenj.github.io/desal-cog.tif'
+];
+
+let georasters = [];
+let weightedLayer = null;
+
+function getColor(norm) {
+    norm = Math.min(Math.max(norm, 0), 1);
+    let r=0,g=0,b=0;
+    if(norm<0.33){ r=0; g=Math.floor(255*norm/0.33); b=255-g; }
+    else if(norm<0.66){ r=Math.floor(255*(norm-0.33)/0.33); g=255; b=0; }
+    else{ r=255; g=Math.floor(255*(1-(norm-0.66)/0.34)); b=0; }
+    return `rgba(${r},${g},${b},0.7)`;
+}
+
+async function loadRasters() {
+    for (let file of rasterFiles) {
+        console.log(`Fetching ${file}...`);
+        const response = await fetch(file);
+        const arrayBuffer = await response.arrayBuffer();
+        const georaster = await parseGeoraster(arrayBuffer);
+        georasters.push(georaster);
+
+        console.log(`✅ Loaded ${file}`);
+        console.log("Width x Height:", georaster.width, "x", georaster.height);
+        console.log("Bands:", georaster.numberOfRasters);
+        console.log("Min:", georaster.mins, "Max:", georaster.maxs);
+    }
+
+    document.getElementById('computeBtn').disabled = false;
+    console.log("✅ All rasters loaded, compute button enabled.");
+}
+
+loadRasters();
+
+document.getElementById('computeBtn').addEventListener('click', () => {
+    console.log("⚡ Computing weighted map...");
+
+    if(georasters.length < rasterFiles.length){
+        alert("Rasters not yet loaded!");
+        return;
+    }
+
+    const w1 = parseFloat(document.getElementById('w1').value);
+    const w2 = parseFloat(document.getElementById('w2').value);
+    const w3 = parseFloat(document.getElementById('w3').value);
+    if(w1 + w2 + w3 !== 100){ alert("Weights must sum to 100!"); return; }
+    const weights = [w1/100, w2/100, w3/100];
+    console.log("Weights:", weights);
+
+    if(weightedLayer) map.removeLayer(weightedLayer);
+
+    const width = Math.min(...georasters.map(r => r.width));
+    const height = Math.min(...georasters.map(r => r.height));
+
+    const weightedData = new Float32Array(width*height);
+    let maskedCount = 0, validCount = 0;
+
+    for(let row=0; row<height; row++){
+        for(let col=0; col<width; col++){
+            let val = 0;
+            let valid = true;
+
+            for(let j=0; j<georasters.length; j++){
+                const raster = georasters[j];
+                const v = raster.values[0][row][col];
+                const nodata = raster.noDataValue;
+
+                if(!Number.isFinite(v) || v===nodata){
+                    valid=false;
+                    break;
+                }
+
+                const min = Array.isArray(raster.mins) ? raster.mins[0] : raster.mins;
+                const max = Array.isArray(raster.maxs) ? raster.maxs[0] : raster.maxs;
+                if(min===max){ valid=false; break; }
+
+                val += ((v-min)/(max-min)) * weights[j];
+            }
+
+            weightedData[row*width + col] = valid ? val : NaN;
+            if(valid) validCount++; else maskedCount++;
+        }
+    }
+
+    console.log("✅ Total valid pixels:", validCount);
+    console.log("❌ Total masked pixels:", maskedCount);
+
+    // ❌ Remove downsampling step — keep full resolution
+    const weightedRaster = {
+        ...georasters[0],
+        numberOfRasters: 1,
+        width: width,
+        height: height,
+        values: [Array.from(weightedData).reduce((arr,row,col)=>{ 
+            arr.push(weightedData.slice(row*width, (row+1)*width)); return arr; 
+        },[])]
+    };
+
+    weightedLayer = new GeoRasterLayer({
+        georaster: weightedRaster,
+        opacity: 0.7,
+        pixelValuesToColorFn: values => {
+            const v = values[0];
+            if(!Number.isFinite(v)) return "rgba(200,200,200,0.05)";
+            return getColor(v);
+        }
+    });
+
+    weightedLayer.addTo(map);
+    map.fitBounds(weightedLayer.getBounds());
+    console.log("🎉 Weighted suitability map added");
+});
+</script>
