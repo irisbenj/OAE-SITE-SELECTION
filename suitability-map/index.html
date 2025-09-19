@@ -10,6 +10,8 @@
     .input-container { margin: 10px; }
     input { width: 60px; margin-right: 5px; }
     .links-container { margin: 10px; }
+    .legend { background: white; padding: 6px; line-height: 1.4em; border-radius: 5px; }
+    .legend i { width: 20px; height: 12px; float: left; margin-right: 8px; opacity: 0.8; }
 </style>
 </head>
 <body>
@@ -85,8 +87,8 @@ function addWeightedLayer() {
 
     weightedLayer = new GeoRasterLayer({
         georasters,
-        opacity: 0.7,
-        resolution: 256,
+        opacity: 0.8,
+        resolution: 512, // lower = faster, higher = more detailed
         pixelValuesToColorFn: values => {
             let score = 0;
             let valid = true;
@@ -99,7 +101,7 @@ function addWeightedLayer() {
                 const norm = (v-min)/(max-min);
                 score += norm * [w1,w2,w3][i];
             }
-            return valid ? getColor(score) : "rgba(200,200,200,0)";
+            return valid ? getColor(score) : null; // fully transparent if NoData
         }
     });
 
@@ -108,7 +110,22 @@ function addWeightedLayer() {
     console.log("🎉 Weighted suitability map added/updated");
 }
 
+// Button
 document.getElementById('updateBtn').addEventListener('click', addWeightedLayer);
+
+// Add legend
+const legend = L.control({position: 'bottomright'});
+legend.onAdd = function () {
+    const div = L.DomUtil.create('div', 'legend');
+    div.innerHTML += "<b>Suitability</b><br>";
+    const grades = [0, 0.33, 0.66, 1];
+    for (let i=0; i<grades.length-1; i++) {
+        const c = getColor((grades[i]+grades[i+1])/2);
+        div.innerHTML += `<i style="background:${c}"></i> ${grades[i].toFixed(2)} – ${grades[i+1].toFixed(2)}<br>`;
+    }
+    return div;
+};
+legend.addTo(map);
 </script>
 </body>
 </html>
