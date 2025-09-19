@@ -1,3 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weighted Suitability Map - Australia</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+    body { font-family: sans-serif; text-align: center; margin:0; padding:0;}
+    #map { width: 1000px; height: 700px; margin: 10px auto; }
+    .input-container { margin: 10px; }
+    input { width: 60px; margin-right: 5px; }
+    .links-container { margin: 10px; }
+</style>
+</head>
+<body>
+<h1>Weighted Suitability Map</h1>
+
+<div class="links-container">
+    <a href="acid_map.html" target="_blank">View ACID Layer</a> |
+    <a href="log_map.html" target="_blank">View LOGISTICS Layer</a> |
+    <a href="desal_map.html" target="_blank">View LOGISTICS Layer</a>
+</div>
+
+<div class="input-container">
+    Acid weight: <input type="number" id="w1" value="33"> %
+    Logistics weight: <input type="number" id="w2" value="33"> %
+    Desal weight: <input type="number" id="w3" value="34"> %
+    <button id="computeBtn" disabled>Compute Weighted Map</button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+<script src="https://unpkg.com/georaster"></script>
+<script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 <script>
 const map = L.map('map').setView([-25, 135], 4);
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', { attribution: 'OSM' }).addTo(map);
@@ -122,3 +158,6 @@ document.getElementById('computeBtn').addEventListener('click', () => {
     console.log("🎉 Weighted suitability map added");
 });
 </script>
+</body>
+</html>
+
