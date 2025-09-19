@@ -1,131 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Weighted Suitability Map - Australia</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<style>
-    body { font-family: sans-serif; text-align: center; margin:0; padding:0;}
-    #map { width: 1000px; height: 700px; margin: 10px auto; }
-    .input-container { margin: 10px; }
-    input { width: 60px; margin-right: 5px; }
-    .links-container { margin: 10px; }
-    .legend { background: white; padding: 6px; line-height: 1.4em; border-radius: 5px; }
-    .legend i { width: 20px; height: 12px; float: left; margin-right: 8px; opacity: 0.8; }
-</style>
+  <meta charset="utf-8" />
+  <title>Suitability Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; width: 100%; }
+    .legend {
+      background: white;
+      padding: 8px;
+      font: 12px Arial, sans-serif;
+      line-height: 18px;
+      color: #333;
+      border-radius: 6px;
+      box-shadow: 0 0 6px rgba(0,0,0,0.2);
+    }
+    .legend i {
+      width: 18px;
+      height: 18px;
+      float: left;
+      margin-right: 8px;
+      opacity: 0.8;
+    }
+  </style>
 </head>
 <body>
-<h1>Weighted Suitability Map</h1>
+  <div id="map"></div>
 
-<div class="links-container">
-    <a href="acid_map.html" target="_blank">View ACID Layer</a> |
-    <a href="log_map.html" target="_blank">View LOGISTICS Layer</a> |
-    <a href="desal_map.html" target="_blank">View DESAL Layer</a>
-</div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/georaster"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+  <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
+  <script>
+    // setup map
+    const map = L.map("map").setView([-25, 135], 4);
 
-<div class="input-container">
-    Acid weight: <input type="number" id="w1" value="33"> %
-    Logistics weight: <input type="number" id="w2" value="33"> %
-    Desal weight: <input type="number" id="w3" value="34"> %
-    <button id="updateBtn" disabled>Update Weighted Map</button>
-</div>
+    // basemap
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors"
+    }).addTo(map);
 
-<div id="map"></div>
+    // color scale 1–10
+    const colorScale = chroma.scale("YlGnBu").domain([1, 10]);
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
-<script src="https://unpkg.com/georaster"></script>
-<script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-<script>
-const map = L.map('map').setView([-25, 135], 4);
-L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; <a href="https://www.stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    ext: 'png'
-}).addTo(map);
+    // load suitability raster
+    fetch("suitability-map.tif")
+      .then(res => res.arrayBuffer())
+      .then(arrayBuffer => {
+        parseGeoraster(arrayBuffer).then(georaster => {
 
-proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs");
+          const layer = new GeoRasterLayer({
+            georaster: georaster,
+            opacity: 0.8,
+            pixelValuesToColorFn: values => {
+              const vals = values.filter(v => v !== null && !isNaN(v));
+              if (vals.length === 0) return null; // transparent for nodata
+              
+              // normalize: average values, clamp to 1–10
+              const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+              const suitability = Math.min(10, Math.max(1, Math.round(avg)));
 
-// Hosted raster COGs
-const rasterFiles = [
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/desal-cog.tif'
-];
-
-let georasters = [];
-let weightedLayer = null;
-
-function getColor(norm) {
-    norm = Math.min(Math.max(norm, 0), 1);
-    let r=0,g=0,b=0;
-    if(norm<0.33){ r=0; g=Math.floor(255*norm/0.33); b=255-g; }
-    else if(norm<0.66){ r=Math.floor(255*(norm-0.33)/0.33); g=255; b=0; }
-    else{ r=255; g=Math.floor(255*(1-(norm-0.66)/0.34)); b=0; }
-    return `rgba(${r},${g},${b},0.7)`;
-}
-
-// Load all rasters
-Promise.all(rasterFiles.map(url => fetch(url)
-    .then(r => r.arrayBuffer())
-    .then(parseGeoraster)))
-.then(results => {
-    georasters = results;
-    console.log("✅ All rasters loaded");
-    document.getElementById('updateBtn').disabled = false;
-    addWeightedLayer();
-});
-
-// Function to build/update suitability layer
-function addWeightedLayer() {
-    const w1 = parseFloat(document.getElementById('w1').value) / 100;
-    const w2 = parseFloat(document.getElementById('w2').value) / 100;
-    const w3 = parseFloat(document.getElementById('w3').value) / 100;
-    const sum = w1+w2+w3;
-    if(sum !== 1) { alert("Weights must sum to 100%"); return; }
-
-    if(weightedLayer) map.removeLayer(weightedLayer);
-
-    weightedLayer = new GeoRasterLayer({
-        georasters,
-        opacity: 0.8,
-        resolution: 512, // lower = faster, higher = more detailed
-        pixelValuesToColorFn: values => {
-            let score = 0;
-            let valid = true;
-            for(let i=0; i<values.length; i++){
-                const v = values[i];
-                if(v==null || isNaN(v)){ valid = false; break; }
-                const min = Array.isArray(georasters[i].mins) ? georasters[i].mins[0] : georasters[i].mins;
-                const max = Array.isArray(georasters[i].maxs) ? georasters[i].maxs[0] : georasters[i].maxs;
-                if(min===max){ valid=false; break; }
-                const norm = (v-min)/(max-min);
-                score += norm * [w1,w2,w3][i];
+              return colorScale(suitability).hex();
             }
-            return valid ? getColor(score) : null; // fully transparent if NoData
-        }
-    });
+          });
 
-    weightedLayer.addTo(map);
-    map.fitBounds(weightedLayer.getBounds());
-    console.log("🎉 Weighted suitability map added/updated");
-}
+          layer.addTo(map);
+          map.fitBounds(layer.getBounds());
 
-// Button
-document.getElementById('updateBtn').addEventListener('click', addWeightedLayer);
-
-// Add legend
-const legend = L.control({position: 'bottomright'});
-legend.onAdd = function () {
-    const div = L.DomUtil.create('div', 'legend');
-    div.innerHTML += "<b>Suitability</b><br>";
-    const grades = [0, 0.33, 0.66, 1];
-    for (let i=0; i<grades.length-1; i++) {
-        const c = getColor((grades[i]+grades[i+1])/2);
-        div.innerHTML += `<i style="background:${c}"></i> ${grades[i].toFixed(2)} – ${grades[i+1].toFixed(2)}<br>`;
-    }
-    return div;
-};
-legend.addTo(map);
-</script>
+          // add legend
+          const legend = L.control({ position: "bottomright" });
+          legend.onAdd = function () {
+            const div = L.DomUtil.create("div", "legend");
+            const grades = [1,2,3,4,5,6,7,8,9,10];
+            grades.forEach(g => {
+              const color = colorScale(g).hex();
+              div.innerHTML +=
+                `<i style="background:${color}"></i>${g}<br>`;
+            });
+            return div;
+          };
+          legend.addTo(map);
+        });
+      });
+  </script>
 </body>
 </html>
