@@ -133,16 +133,23 @@ document.getElementById('computeBtn').addEventListener('click', () => {
     console.log("✅ Total valid pixels:", validCount);
     console.log("❌ Total masked pixels:", maskedCount);
 
-    // ❌ Remove downsampling step — keep full resolution
-    const weightedRaster = {
-        ...georasters[0],
-        numberOfRasters: 1,
-        width: width,
-        height: height,
-        values: [Array.from(weightedData).reduce((arr,row,col)=>{ 
-            arr.push(weightedData.slice(row*width, (row+1)*width)); return arr; 
-        },[])]
-    };
+        const weightedValues = [];
+        for (let row = 0; row < height; row++) {
+            const rowVals = [];
+            for (let col = 0; col < width; col++) {
+                rowVals.push(weightedData[row * width + col]);
+            }
+            weightedValues.push(rowVals);
+        }
+
+        const weightedRaster = {
+            ...georasters[0],
+            numberOfRasters: 1,
+            width: width,
+            height: height,
+            values: [weightedValues]
+        };
+
 
     weightedLayer = new GeoRasterLayer({
         georaster: weightedRaster,
