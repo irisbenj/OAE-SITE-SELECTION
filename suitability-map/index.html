@@ -133,23 +133,24 @@ document.getElementById('computeBtn').addEventListener('click', () => {
     console.log("✅ Total valid pixels:", validCount);
     console.log("❌ Total masked pixels:", maskedCount);
 
-        const weightedValues = [];
-        for (let row = 0; row < height; row++) {
-            const rowVals = [];
-            for (let col = 0; col < width; col++) {
-                rowVals.push(weightedData[row * width + col]);
-            }
-            weightedValues.push(rowVals);
-        }
+    
+// Build 2D array from flat weightedData
+const weightedValues = [];
+for (let row = 0; row < height; row++) {
+    const rowVals = [];
+    for (let col = 0; col < width; col++) {
+        rowVals.push(weightedData[row * width + col]);
+    }
+    weightedValues.push(rowVals);
+}
 
-        const weightedRaster = {
-            ...georasters[0],
-            numberOfRasters: 1,
-            width: width,
-            height: height,
-            values: [weightedValues]
-        };
-
+const weightedRaster = {
+    ...georasters[0],
+    numberOfRasters: 1,
+    width: width,
+    height: height,
+    values: [weightedValues]
+};
 
     weightedLayer = new GeoRasterLayer({
         georaster: weightedRaster,
