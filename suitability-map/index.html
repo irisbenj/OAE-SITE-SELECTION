@@ -84,24 +84,34 @@ function addWeightedLayer() {
         georasters,
         opacity: 0.8,
         resolution: 256, // lower = smoother & faster
-        pixelValuesToColorFn: values => {
-            let score = 0;
-            let valid = true;
-            for(let i=0; i<values.length; i++){
-                const v = values[i];
-                if(v==null || isNaN(v)){ valid = false; break; }
-                const min = Array.isArray(georasters[i].mins) ? georasters[i].mins[0] : georasters[i].mins;
-                const max = Array.isArray(georasters[i].maxs) ? georasters[i].maxs[0] : georasters[i].maxs;
-                if(min===max){ valid=false; break; }
-                const norm = (v-min)/(max-min);
-                score += norm * [w1,w2,w3][i];
-            }
-            if(!valid) return null; // transparent nodata
+pixelValuesToColorFn: values => {
+    let score = 0;
+    let valid = true;
+    for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        const raster = georasters[i];
+        const nodata = raster.noDataValue ?? 0; // default 0 if not set
 
-            // scale to 1–10
-            const suitability = Math.min(10, Math.max(1, Math.round(score*9 + 1)));
-            return colorScale(suitability).hex();
+        if (v == null || isNaN(v) || v === nodata) {
+            valid = false;
+            break;
         }
+
+        const min = Array.isArray(raster.mins) ? raster.mins[0] : raster.mins;
+        const max = Array.isArray(raster.maxs) ? raster.maxs[0] : raster.maxs;
+        if (min === max) { valid = false; break; }
+
+        const norm = (v - min) / (max - min);
+        score += norm * [w1, w2, w3][i];
+    }
+
+    if (!valid) return null; // transparent nodata
+
+    // scale to 1–10
+    const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
+    return colorScale(suitability).hex();
+}
+
     });
 
     weightedLayer.addTo(map);
