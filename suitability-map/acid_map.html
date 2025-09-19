@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ACID Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+    body { font-family: sans-serif; text-align: center; margin:0; padding:0;}
+    #map { width: 1000px; height: 700px; margin: 10px auto; }
+</style>
+</head>
+<body>
+<h1>ACID Raster Map</h1>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+<script src="https://unpkg.com/georaster"></script>
+<script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+
+<script>
+// Initialize map
+const map = L.map('map').setView([-25, 135], 4);
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png', { attribution: 'OSM' }).addTo(map);
+
+// EPSG:9473
+proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs");
+
+// Raster file
+const rasterFile = 'clip-acid.tif';
+
+// Color ramp
+function getColor(val){
+    val = Math.min(Math.max(val,0),1);
+    let r=0,g=0,b=0;
+    if(val<0.33){ r=0; g=Math.floor(255*val/0.33); b=255-g; }
+    else if(val<0.66){ r=Math.floor(255*(val-0.33)/0.33); g=255; b=0; }
+    else{ r=255; g=Math.floor(255*(1-(val-0.66)/0.34)); b=0; }
+    return `rgba(${r},${g},${b},0.7)`;
+}
+
+// Load raster
+(async ()=>{
+    const resp = await fetch(rasterFile);
+    const buf = await resp.arrayBuffer();
+    const georaster = await parseGeoraster(buf);
+
+    const layer = new GeoRasterLayer({
+        georaster,
+        opacity: 0.7,
+        pixelValuesToColorFn: values => {
+            const v = values[0];
+            return v>0 ? getColor((v-1)/9) : null; // normalize 1–10, skip 0
+        }
+    });
+
+    layer.addTo(map);
+    map.fitBounds(layer.getBounds());
+})();
+</script>
+</body>
+</html>
