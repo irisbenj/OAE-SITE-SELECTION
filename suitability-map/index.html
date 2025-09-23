@@ -44,9 +44,6 @@ L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.pn
     ext: 'png'
 }).addTo(map);
 
-proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs");
-
-// Hosted raster COGs
 const rasterFiles = [
     'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
     'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
@@ -67,10 +64,50 @@ Promise.all(rasterFiles.map(url => fetch(url)
     georasters = results;
     console.log("✅ All rasters loaded");
     document.getElementById('updateBtn').disabled = false;
-    addWeightedLayer();
+    addWeightedLayer(); // run once at start
 });
 
-// Function to build/update suitability layer
+// --- NEW FUNCTION: compute weighted raster once ---
+function computeWeightedRaster(georasters, weights) {
+    const [w1, w2, w3] = weights;
+    const base = georasters[0];
+    const width = base.width;
+    const height = base.height;
+
+    const newData = new Float32Array(width * height);
+
+    for (let i = 0; i < width * height; i++) {
+        let score = 0;
+        let valid = true;
+
+        for (let j = 0; j < georasters.length; j++) {
+            const raster = georasters[j];
+            const v = raster.values[0][i];
+            const nodata = raster.noDataValue ?? 0;
+
+            if (v === nodata || isNaN(v)) {
+                valid = false;
+                break;
+            }
+
+            const min = raster.mins[0];
+            const max = raster.maxs[0];
+            if (min === max) { valid = false; break; }
+
+            score += ((v - min) / (max - min)) * weights[j];
+        }
+
+        newData[i] = valid ? score : NaN;
+    }
+
+    // return a single georaster object
+    return {
+        ...base,
+        values: [newData]
+    };
+}
+
+// --- Build/update suitability layer ---
 function addWeightedLayer() {
     const w1 = parseFloat(document.getElementById('w1').value) / 100;
     const w2 = parseFloat(document.getElementById('w2').value) / 100;
@@ -80,38 +117,18 @@ function addWeightedLayer() {
 
     if(weightedLayer) map.removeLayer(weightedLayer);
 
+    const weightedRaster = computeWeightedRaster(georasters, [w1, w2, w3]);
+
     weightedLayer = new GeoRasterLayer({
-        georasters,
+        georasters: [weightedRaster],  // ✅ only one raster now
         opacity: 0.8,
-        resolution: 256, // lower = smoother & faster
-pixelValuesToColorFn: values => {
-    let score = 0;
-    let valid = true;
-    for (let i = 0; i < values.length; i++) {
-        const v = values[i];
-        const raster = georasters[i];
-        const nodata = raster.noDataValue ?? 0; // default 0 if not set
-
-        if (v == null || isNaN(v) || v === nodata) {
-            valid = false;
-            break;
+        resolution: 512, // bump up for speed
+        pixelValuesToColorFn: values => {
+            const score = values[0];
+            if (isNaN(score)) return null;
+            const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
+            return colorScale(suitability).hex();
         }
-
-        const min = Array.isArray(raster.mins) ? raster.mins[0] : raster.mins;
-        const max = Array.isArray(raster.maxs) ? raster.maxs[0] : raster.maxs;
-        if (min === max) { valid = false; break; }
-
-        const norm = (v - min) / (max - min);
-        score += norm * [w1, w2, w3][i];
-    }
-
-    if (!valid) return null; // transparent nodata
-
-    // scale to 1–10
-    const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
-    return colorScale(suitability).hex();
-}
-
     });
 
     weightedLayer.addTo(map);
@@ -128,12 +145,12 @@ legend.onAdd = function () {
     const div = L.DomUtil.create('div', 'legend');
     div.innerHTML += "<b>Suitability (1–10)</b><br>";
     for(let i=1; i<=10; i++) {
-        div.innerHTML +=
-            `<i style="background:${colorScale(i).hex()}"></i> ${i}<br>`;
+        div.innerHTML += `<i style="background:${colorScale(i).hex()}"></i> ${i}<br>`;
     }
     return div;
 };
 legend.addTo(map);
 </script>
+
 </body>
 </html>
