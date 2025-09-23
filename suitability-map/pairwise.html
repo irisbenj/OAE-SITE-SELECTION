@@ -20,80 +20,24 @@
     text-align: center;
   }
 
-  header h1 {
-    margin: 0;
-    font-size: 1.8rem;
-  }
+  header h1 { margin: 0; font-size: 1.8rem; }
+  main { padding: 2rem; max-width: 1000px; margin: auto; }
 
-  main {
-    padding: 2rem;
-    max-width: 900px;
-    margin: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 2rem;
-    background: #fff;
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  }
-
-  th, td {
-    padding: 0.8rem;
-    text-align: center;
-    border-bottom: 1px solid #e0e0e0;
-  }
-
-  th {
-    background: #007acc;
-    color: #fff;
-    font-weight: 500;
-  }
-
-  td:first-child, td:last-child {
-    font-weight: 500;
-    text-align: left;
-  }
-
-  select {
-    padding: 0.3rem;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    width: 100%;
-  }
-
-  button {
-    background: #007acc;
-    color: #fff;
-    border: none;
-    padding: 0.6rem 1.2rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: background 0.2s;
-  }
-
-  button:hover {
-    background: #005fa3;
-  }
-
-  #results {
-    margin-top: 1rem;
-    background: #fff;
-    padding: 1rem;
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+  th, td { padding: 0.8rem; text-align: center; border-bottom: 1px solid #e0e0e0; }
+  th { background: #007acc; color: #fff; }
+  td:first-child, td:last-child { text-align: left; font-weight: 500; }
+  select { padding: 0.3rem; border-radius: 4px; border: 1px solid #ccc; width: 100%; }
+  button { background: #007acc; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 500; transition: background 0.2s; }
+  button:hover { background: #005fa3; }
+  #results { margin-top: 1rem; background: #fff; padding: 1rem; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Pairwise Comparison Tool</h1>
-  <p>Determine weightings for criteria using a 17-point fuzzy AHP scale.</p>
+  <p>Select comparisons to compute normalized weightings for your criteria.</p>
 </header>
 
 <main>
@@ -106,108 +50,97 @@
       </tr>
     </thead>
     <tbody>
-      <!-- Example row -->
-      <tr>
-        <td>Acid</td>
-        <td>
-          <select>
-            <!-- 17-point scale options -->
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9" selected>9</option>
-            <option value="10">10</option>
-            <option value="11">11</option>
-            <option value="12">12</option>
-            <option value="13">13</option>
-            <option value="14">14</option>
-            <option value="15">15</option>
-            <option value="16">16</option>
-            <option value="17">17</option>
-          </select>
-        </td>
-        <td>Logistics</td>
-      </tr>
-
-      <tr>
-        <td>Acid</td>
-        <td>
-          <select>
-            <!-- duplicate scale for example -->
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-            <option value="6">6</option>
-            <option value="7">7</option>
-            <option value="8">8</option>
-            <option value="9" selected>9</option>
-            <option value="10">10</option>
-            <option value="11">11</option>
-            <option value="12">12</option>
-            <option value="13">13</option>
-            <option value="14">14</option>
-            <option value="15">15</option>
-            <option value="16">16</option>
-            <option value="17">17</option>
-          </select>
-        </td>
-        <td>Desal</td>
-      </tr>
-
-      <tr>
-        <td>Logistics</td>
-        <td>
-          <select>
-            <option value="1">Extremely Important</option>
-            <option value="2"> </option>
-            <option value="3">Very Strongly Important</option>
-            <option value="4"> </option>
-            <option value="5">Strongly Important</option>
-            <option value="6"> </option>
-            <option value="7">Slightly Important</option>
-            <option value="8"> </option>
-            <option value="9" selected>Equal</option>
-            <option value="10"> </option>
-            <option value="11">Slightly Important</option>
-            <option value="12"> </option>
-            <option value="13">Strongly Important</option>
-            <option value="14"> </option>
-            <option value="15">Very Strongly Important</option>
-            <option value="16"> </option>
-            <option value="17">Extremely Important</option>
-          </select>
-        </td>
-        <td>Desal</td>
-      </tr>
+      <!-- rows will be generated automatically -->
     </tbody>
   </table>
 
   <button id="computeBtn">Compute Weightings</button>
 
   <div id="results">
-    <!-- Placeholder for computed % weightings -->
-    <p>Weightings will appear here after computation.</p>
+    <p>Normalized weights will appear here.</p>
   </div>
 </main>
 
 <script>
-document.getElementById('computeBtn').addEventListener('click', () => {
-  const selects = document.querySelectorAll('#pairwiseTable select');
-  // For now, just log the values
-  const values = Array.from(selects).map(s => parseInt(s.value));
-  console.log('Selected comparison values:', values);
+const variables = [
+  "Logistics", 
+  "Energy Cost", 
+  "Energy Carbon Intensity", 
+  "Proximity to Acid Disposal", 
+  "Oceanic Conditions", 
+  "Potential for Brine", 
+  "Distance from the Coast"
+];
 
-  // Placeholder: just show dummy % for now
-  document.getElementById('results').innerHTML = `
-    <p>Acid: 33%<br>Logistics: 33%<br>Desal: 34%</p>
-  `;
+const scaleOptions = [
+  {value: 1, label: "Extremely Important"}, 
+  {value: 2, label: ""}, 
+  {value: 3, label: "Very Strongly Important"}, 
+  {value: 4, label: ""}, 
+  {value: 5, label: "Strongly Important"}, 
+  {value: 6, label: ""}, 
+  {value: 7, label: "Slightly Important"}, 
+  {value: 8, label: ""}, 
+  {value: 9, label: "Equal"}, 
+  {value: 10, label: ""}, 
+  {value: 11, label: "Slightly Important"}, 
+  {value: 12, label: ""}, 
+  {value: 13, label: "Strongly Important"}, 
+  {value: 14, label: ""}, 
+  {value: 15, label: "Very Strongly Important"}, 
+  {value: 16, label: ""}, 
+  {value: 17, label: "Extremely Important"}
+];
+
+// --- generate pairwise rows ---
+const tbody = document.querySelector('#pairwiseTable tbody');
+for (let i = 0; i < variables.length; i++) {
+  for (let j = i + 1; j < variables.length; j++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${variables[i]}</td>
+      <td>
+        <select>
+          ${scaleOptions.map(opt => `<option value="${opt.value}" ${opt.value===9?'selected':''}>${opt.label}</option>`).join('')}
+        </select>
+      </td>
+      <td>${variables[j]}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// --- compute normalized weights ---
+document.getElementById('computeBtn').addEventListener('click', () => {
+  const n = variables.length;
+  const matrix = Array.from({length: n}, () => Array(n).fill(1));
+
+  const rows = Array.from(document.querySelectorAll('#pairwiseTable tbody tr'));
+  let k = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const val = parseInt(rows[k].querySelector('select').value);
+      // scale to AHP reciprocal (1-17 → 1/9 to 9)
+      const ahpValue = val < 9 ? 1 / (9 - val + 1) : val > 9 ? val - 8 : 1;
+      matrix[i][j] = ahpValue;
+      matrix[j][i] = 1 / ahpValue;
+      k++;
+    }
+  }
+
+  // --- compute normalized weights (sum of rows, normalize) ---
+  const rowSums = matrix.map(row => row.reduce((a,b)=>a+b,0));
+  const colSums = matrix[0].map((_, col) => matrix.reduce((sum, row) => sum + row[col], 0));
+  const normalizedMatrix = matrix.map((row, i) => row.map((val, j) => val / colSums[j]));
+  const weights = normalizedMatrix.map(row => row.reduce((a,b)=>a+b,0)/n);
+
+  // display results
+  let html = '<h3>Normalized Weights</h3><ul>';
+  variables.forEach((v,i)=>{
+    html += `<li>${v}: ${(weights[i]*100).toFixed(1)}%</li>`;
+  });
+  html += '</ul>';
+  document.getElementById('results').innerHTML = html;
 });
 </script>
 
