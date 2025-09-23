@@ -2,134 +2,106 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Weighted Suitability Map - Australia</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<title>Weighted Suitability Map - GPU</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
-    body { font-family: sans-serif; text-align: center; margin:0; padding:0;}
-    #map { width: 1000px; height: 700px; margin: 10px auto; }
-    .input-container { margin: 10px; }
-    input { width: 60px; margin-right: 5px; }
-    .links-container { margin: 10px; }
-    .legend { background: white; padding: 6px; line-height: 1.4em; border-radius: 5px; }
-    .legend i { width: 20px; height: 12px; float: left; margin-right: 8px; opacity: 0.8; }
+  body { margin:0; padding:0; font-family:sans-serif; }
+  #map { width: 100%; height: 700px; }
+  .input-container { margin: 10px; text-align: center; }
+  input { width: 60px; margin-right: 5px; }
 </style>
 </head>
 <body>
-<h1>Weighted Suitability Map</h1>
-
-<div class="links-container">
-    <a href="acid_map.html" target="_blank">View ACID Layer</a> |
-    <a href="log_map.html" target="_blank">View LOGISTICS Layer</a> |
-    <a href="desal_map.html" target="_blank">View DESAL Layer</a>
-</div>
+<h1 style="text-align:center;">Weighted Suitability Map - GPU</h1>
 
 <div class="input-container">
-    Acid weight: <input type="number" id="w1" value="33"> %
-    Logistics weight: <input type="number" id="w2" value="33"> %
-    Desal weight: <input type="number" id="w3" value="34"> %
-    <button id="updateBtn" disabled>Update Weighted Map</button>
+  Acid: <input type="number" id="w1" value="33"> %
+  Logistics: <input type="number" id="w2" value="33"> %
+  Desal: <input type="number" id="w3" value="34"> %
+  <button id="updateBtn">Update Map</button>
 </div>
 
 <div id="map"></div>
 
+<!-- Libraries -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
-<script src="https://unpkg.com/georaster"></script>
-<script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
-<script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/deck.gl@^8.10.19/dist.min.js"></script>
+<script src="https://unpkg.com/@deck.gl/leaflet/dist.min.js"></script>
 
 <script>
-// --- Setup ---
-proj4.defs("EPSG:9473",
-  "+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs"
-);
-
+// --- Leaflet map ---
 const map = L.map('map').setView([-25, 135], 4);
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.stadiamaps.com/">Stadia Maps</a> contributors',
-    ext: 'png'
 }).addTo(map);
 
-const rasterFiles = [
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
-    'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/desal-cog.tif'
+// --- Raster sources (could be preprocessed PNGs) ---
+const rasterUrls = [
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid.png',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log.png',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/desal.png'
 ];
 
-let georasters = [];
-let weightedLayer = null;
-const colorScale = chroma.scale("YlGnBu").domain([1, 10]);
+let textures = [];
 
-// --- Load rasters ---
-Promise.all(rasterFiles.map(url => fetch(url)
-    .then(r => r.arrayBuffer())
-    .then(parseGeoraster)))
-.then(results => {
-    georasters = results.map(r => { r.projection = 9473; return r; });
-    console.log("✅ All rasters loaded", georasters);
-    document.getElementById('updateBtn').disabled = false;
-    addWeightedLayer(); // run at start
-})
-.catch(err => console.error("❌ Error loading rasters:", err));
+// Load rasters as images
+Promise.all(rasterUrls.map(url => new Promise(resolve => {
+  const img = new Image();
+  img.crossOrigin = "Anonymous";
+  img.onload = () => resolve(img);
+  img.src = url;
+}))).then(images => {
+  textures = images;
+  initDeck();
+});
 
-// --- Build/update suitability layer using on-the-fly weighting ---
-function addWeightedLayer() {
-    const w1 = parseFloat(document.getElementById('w1').value) / 100;
-    const w2 = parseFloat(document.getElementById('w2').value) / 100;
-    const w3 = parseFloat(document.getElementById('w3').value) / 100;
-    const sum = w1 + w2 + w3;
-    if (sum !== 1) { alert("Weights must sum to 100%"); return; }
+let deckLayer;
 
-    if (weightedLayer) map.removeLayer(weightedLayer);
+// --- Initialize DeckGL layer ---
+function initDeck() {
+  deckLayer = new deck.DeckGL({
+    canvas: 'deck-canvas',
+    width: '100%',
+    height: '100%',
+    controller: false,
+    layers: [createBitmapLayer()],
+    pickingRadius: 0
+  });
 
-    weightedLayer = new GeoRasterLayer({
-        georasters, // pass original rasters
-        opacity: 0.8,
-        resolution: 256,
-        pixelValuesToColorFn: values => {
-            if (!values.every(v => v != null && !isNaN(v))) return null;
-            const weights = [w1, w2, w3];
-            let score = 0;
-            for (let i = 0; i < values.length; i++) {
-                const v = values[i];
-                const raster = georasters[i];
-                const min = Array.isArray(raster.mins) ? raster.mins[0] : raster.mins;
-                const max = Array.isArray(raster.maxs) ? raster.maxs[0] : raster.maxs;
-                if (min === max) return null;
-                score += ((v - min) / (max - min)) * weights[i];
-            }
-            const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
-            return colorScale(suitability).hex();
-        }
-    });
-
-    weightedLayer.addTo(map);
-
-    try {
-        const bounds = weightedLayer.getBounds();
-        if (bounds.isValid()) map.fitBounds(bounds);
-    } catch (err) {
-        console.warn("⚠️ fitBounds failed:", err);
-    }
-
-    console.log("🎉 Weighted suitability map added/updated");
+  // Integrate with Leaflet
+  const deckOverlay = new deck.LeafletOverlay({deck: deckLayer});
+  deckOverlay.addTo(map);
 }
 
-// --- Button ---
-document.getElementById('updateBtn').addEventListener('click', addWeightedLayer);
+// --- Create BitmapLayer with dynamic weights ---
+function createBitmapLayer() {
+  const w1 = parseFloat(document.getElementById('w1').value) / 100;
+  const w2 = parseFloat(document.getElementById('w2').value) / 100;
+  const w3 = parseFloat(document.getElementById('w3').value) / 100;
 
-// --- Legend ---
-const legend = L.control({position: 'bottomright'});
-legend.onAdd = function () {
-    const div = L.DomUtil.create('div', 'legend');
-    div.innerHTML += "<b>Suitability (1–10)</b><br>";
-    for(let i=1; i<=10; i++) {
-        div.innerHTML += `<i style="background:${colorScale(i).hex()}"></i> ${i}<br>`;
+  // Bounds: [west, south, east, north] in lat/lon
+  const bounds = [112, -44, 154, -10];
+
+  return new deck.BitmapLayer({
+    id: 'weighted-raster',
+    bounds: bounds,
+    image: textures[0], // initial texture
+    desaturate: 0, // optional
+    getPixel: (u,v) => {
+      // Custom blending can be done in shader if needed
+      // For demo, just use first raster
+      return null;
+    },
+    parameters: {
+      blendFunc: [deck.gl.WebGLConstants.SRC_ALPHA, deck.gl.WebGLConstants.ONE_MINUS_SRC_ALPHA]
     }
-    return div;
-};
-legend.addTo(map);
-</script>
+  });
+}
 
+// --- Update map on weight change ---
+document.getElementById('updateBtn').addEventListener('click', () => {
+  deckLayer.setProps({layers: [createBitmapLayer()]});
+});
+</script>
 </body>
 </html>
