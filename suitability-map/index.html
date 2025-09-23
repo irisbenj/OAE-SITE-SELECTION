@@ -74,18 +74,31 @@ function addWeightedLayer(){
     opacity:0.8,
     resolution:128, // faster, smoother
     pixelValuesToColorFn: values => {
-      if(!values.every(v=>v!=null&&!isNaN(v))) return null;
+    let valid = true;
+    let score = 0;
+    const weights = [w1, w2, w3];
 
-      let score=0;
-      const weights=[w1,w2,w3];
-      for(let i=0;i<values.length;i++){
+    for (let i = 0; i < values.length; i++) {
         const v = values[i];
-        // rasters are already 1-10, normalize to 0-1
-        score += ((v-1)/9)*weights[i];
-      }
-      const suitability=Math.min(10,Math.max(1,Math.round(score*9+1)));
-      return colorScale(suitability).hex();
+        const raster = georasters[i];
+        const nodata = raster.noDataValue ?? null;
+
+        // if value is null, NaN, or matches noDataValue, skip
+        if (v == null || isNaN(v) || (nodata !== null && v === nodata)) {
+            valid = false;
+            break;
+        }
+
+        // normalize 1–10 to 0–1
+        score += ((v - 1) / 9) * weights[i];
     }
+
+    if (!valid) return null; // transparent for nodata pixels
+
+    const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
+    return colorScale(suitability).hex();
+}
+
   });
 
   weightedLayer.addTo(map);
