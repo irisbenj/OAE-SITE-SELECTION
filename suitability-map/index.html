@@ -38,6 +38,11 @@
 <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
 <script>
+
+proj4.defs("EPSG:9473",
+  "+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs"
+);
+
 const map = L.map('map').setView([-25, 135], 4);
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; <a href="https://www.stadiamaps.com/">Stadia Maps</a> contributors',
