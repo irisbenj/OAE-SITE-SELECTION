@@ -17,9 +17,13 @@
 <h1>Weighted Suitability Map</h1>
 
 <div class="input-container">
-  Acid: <input type="number" id="w1" value="33"> %
-  Logistics: <input type="number" id="w2" value="33"> %
-  Desal: <input type="number" id="w3" value="34"> %
+  Logistics: <input type="number" id="w1" value="0"> %
+  Energy Cost: <input type="number" id="w2" value="0"> %
+  Energy Carbon Intensity: <input type="number" id="w3" value="0"> %
+  Proximity To Acid Disposal: <input type="number" id="w4" value="0"> %
+  Oceanic Conditions: <input type="number" id="w5" value="0"> %
+  Potential For Brine: <input type="number" id="w6" value="0"> %
+  Distance From The Coast: <input type="number" id="w7" value="0"> %
   <button id="updateBtn" disabled>Update Map</button>
 </div>
 
@@ -36,9 +40,13 @@ proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0
 
 // --- Read weights from URL query parameters ---
 const params = new URLSearchParams(window.location.search);
-document.getElementById('w1').value = params.get('w1') ?? 33;
-document.getElementById('w2').value = params.get('w2') ?? 33;
-document.getElementById('w3').value = params.get('w3') ?? 34;
+document.getElementById('w1').value = params.get('w1') ?? 0;
+document.getElementById('w2').value = params.get('w2') ?? 0;
+document.getElementById('w3').value = params.get('w3') ?? 0;
+document.getElementById('w4').value = params.get('w4') ?? 0;
+document.getElementById('w5').value = params.get('w5') ?? 0;
+document.getElementById('w6').value = params.get('w6') ?? 0;
+document.getElementById('w7').value = params.get('w7') ?? 0;
 
 const map = L.map('map').setView([-25, 135], 4);
 L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
@@ -46,9 +54,13 @@ L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.pn
 }).addTo(map);
 
 const rasterFiles = [
-  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
-  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
-  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/desal-cog.tif'
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/acid.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/desal.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/distance.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/energyc.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/energyci.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/logistics.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/cloud-optimised-tifs/ocean.tif',
 ];
 
 let georasters = [];
@@ -69,7 +81,11 @@ function addWeightedLayer(res=128){
   const w1=parseFloat(document.getElementById('w1').value)/100;
   const w2=parseFloat(document.getElementById('w2').value)/100;
   const w3=parseFloat(document.getElementById('w3').value)/100;
-  const sum=w1+w2+w3;
+  const w4=parseFloat(document.getElementById('w4').value)/100;
+  const w5=parseFloat(document.getElementById('w5').value)/100;
+  const w6=parseFloat(document.getElementById('w6').value)/100;
+  const w7=parseFloat(document.getElementById('w7').value)/100;
+  const sum=w1+w2+w3+w4+w5+w6+w7;
   if(sum!==1){alert("Weights must sum to 100%"); return;}
 
   // Remove old layers
@@ -79,7 +95,7 @@ function addWeightedLayer(res=128){
   const weightedFn = values => {
     let valid = true;
     let score = 0;
-    const weights = [w1,w2,w3];
+    const weights = [w1,w2,w3,w4,w5,w6,w7];
 
     for(let i=0;i<values.length;i++){
       const v = values[i];
