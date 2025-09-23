@@ -72,62 +72,8 @@ Promise.all(rasterFiles.map(url => fetch(url)
 })
 .catch(err => console.error("❌ Error loading rasters:", err));
 
-// --- Chunked weighted raster calculation ---
-async function computeWeightedRasterChunked(georasters, weights, chunkSize = 10000) {
-    const base = georasters[0];
-    const total = base.width * base.height;
-    const newData = base.values[0]; // reuse array in-place
-    const numRasters = georasters.length;
-
-    console.log(`Processing ${total} pixels in chunks of ${chunkSize}...`);
-
-    for (let startIdx = 0; startIdx < total; startIdx += chunkSize) {
-        const endIdx = Math.min(startIdx + chunkSize, total);
-
-        for (let i = startIdx; i < endIdx; i++) {
-            let score = 0;
-            let valid = true;
-
-            for (let j = 0; j < numRasters; j++) {
-                const raster = georasters[j];
-                const v = raster.values[0][i];
-                const nodata = raster.noDataValue ?? 0;
-
-                if (v === nodata || isNaN(v)) {
-                    valid = false;
-                    break;
-                }
-
-                const min = raster.mins[0];
-                const max = raster.maxs[0];
-                if (min === max) { valid = false; break; }
-
-                score += ((v - min) / (max - min)) * weights[j];
-            }
-
-            newData[i] = valid ? score : NaN;
-        }
-
-        // yield to browser
-        await new Promise(r => setTimeout(r, 0));
-
-        if (startIdx % (chunkSize * 50) === 0) {
-            console.log(`Processed ${endIdx} / ${total}`);
-        }
-    }
-
-    console.log("✅ Weighted raster chunked processing complete");
-
-    return {
-        ...base,
-        values: [newData],
-        projection: 9473,
-        noDataValue: NaN
-    };
-}
-
-// --- Build/update suitability layer ---
-async function addWeightedLayer() {
+// --- Build/update suitability layer using on-the-fly weighting ---
+function addWeightedLayer() {
     const w1 = parseFloat(document.getElementById('w1').value) / 100;
     const w2 = parseFloat(document.getElementById('w2').value) / 100;
     const w3 = parseFloat(document.getElementById('w3').value) / 100;
@@ -136,15 +82,22 @@ async function addWeightedLayer() {
 
     if (weightedLayer) map.removeLayer(weightedLayer);
 
-    const weightedRaster = await computeWeightedRasterChunked(georasters, [w1, w2, w3]);
-
     weightedLayer = new GeoRasterLayer({
-        georasters: [weightedRaster],
+        georasters, // pass original rasters
         opacity: 0.8,
         resolution: 256,
         pixelValuesToColorFn: values => {
-            const score = values[0];
-            if (isNaN(score)) return null;
+            if (!values.every(v => v != null && !isNaN(v))) return null;
+            const weights = [w1, w2, w3];
+            let score = 0;
+            for (let i = 0; i < values.length; i++) {
+                const v = values[i];
+                const raster = georasters[i];
+                const min = Array.isArray(raster.mins) ? raster.mins[0] : raster.mins;
+                const max = Array.isArray(raster.maxs) ? raster.maxs[0] : raster.maxs;
+                if (min === max) return null;
+                score += ((v - min) / (max - min)) * weights[i];
+            }
             const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
             return colorScale(suitability).hex();
         }
@@ -177,5 +130,6 @@ legend.onAdd = function () {
 };
 legend.addTo(map);
 </script>
+
 </body>
 </html>
