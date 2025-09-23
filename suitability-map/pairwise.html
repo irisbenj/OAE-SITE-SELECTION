@@ -58,9 +58,16 @@ const fuzzy17TFN = {
 };
 
 // --- Generate options HTML
+// Correct order: 9 -> 1 -> 1/9
+const fuzzy17Order = [
+  "9","8","7","6","5","4","3","2","1",
+  "1/2","1/3","1/4","1/5","1/6","1/7","1/8","1/9"
+];
+
 function generate17Options() {
-  return Object.keys(fuzzy17TFN).map(k => `<option value="${k}" ${k==="1"?'selected':''}>${k}</option>`).join('');
+  return fuzzy17Order.map(k => `<option value="${k}" ${k==="1"?'selected':''}>${k}</option>`).join('');
 }
+
 
 // --- Reciprocal of a TFN
 function reciprocalTFN(tfn) {
@@ -125,7 +132,7 @@ document.getElementById("computeBtn").addEventListener("click", ()=>{
   variables.forEach((v,i)=>{
     const w = defuzzified[i].toFixed(3);
     const li = document.createElement("li");
-    li.textContent = `${v}: ${w}`;
+    li.textContent = `${v}: ${w*100}%`;
     ul.appendChild(li);
   });
 });
