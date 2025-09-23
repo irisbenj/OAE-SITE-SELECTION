@@ -39,7 +39,6 @@ L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.pn
   attribution:'&copy; <a href="https://www.stadiamaps.com/">Stadia Maps</a> contributors'
 }).addTo(map);
 
-// Input raster COGs
 const rasterFiles = [
   'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
   'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
@@ -47,71 +46,70 @@ const rasterFiles = [
 ];
 
 let georasters = [];
-let weightedLayer = null;
+let lowResLayer = null;
+let highResLayer = null;
 const colorScale = chroma.scale("YlGnBu").domain([1,10]);
 
-// Load rasters
 Promise.all(rasterFiles.map(url => fetch(url).then(r => r.arrayBuffer()).then(parseGeoraster)))
 .then(results => {
   georasters = results.map(r => { r.projection=9473; return r; });
   console.log("✅ All rasters loaded");
   document.getElementById('updateBtn').disabled=false;
-  addWeightedLayer(); // initial load
+  addWeightedLayer(128); // initial low-res layer
 }).catch(err => console.error("❌ Error loading rasters:",err));
 
-// Compute weighted suitability
-function addWeightedLayer(){
+// Function to build/update weighted layer
+function addWeightedLayer(res=128){
   const w1=parseFloat(document.getElementById('w1').value)/100;
   const w2=parseFloat(document.getElementById('w2').value)/100;
   const w3=parseFloat(document.getElementById('w3').value)/100;
   const sum=w1+w2+w3;
   if(sum!==1){alert("Weights must sum to 100%"); return;}
 
-  if(weightedLayer) map.removeLayer(weightedLayer);
+  // Remove old layers
+  if(lowResLayer) map.removeLayer(lowResLayer);
+  if(highResLayer) map.removeLayer(highResLayer);
 
-  weightedLayer = new GeoRasterLayer({
-    georasters,
-    opacity:0.8,
-    resolution:128, // faster, smoother
-    pixelValuesToColorFn: values => {
+  const weightedFn = values => {
     let valid = true;
     let score = 0;
-    const weights = [w1, w2, w3];
+    const weights = [w1,w2,w3];
 
-    for (let i = 0; i < values.length; i++) {
-        const v = values[i];
-        const raster = georasters[i];
-        const nodata = raster.noDataValue ?? null;
+    for(let i=0;i<values.length;i++){
+      const v = values[i];
+      const raster = georasters[i];
+      const nodata = raster.noDataValue ?? null;
 
-        // if value is null, NaN, or matches noDataValue, skip
-        if (v == null || isNaN(v) || (nodata !== null && v === nodata)) {
-            valid = false;
-            break;
-        }
+      if(v==null||isNaN(v)||(nodata!==null&&v===nodata)){ valid=false; break; }
 
-        // normalize 1–10 to 0–1
-        score += ((v - 1) / 9) * weights[i];
+      score += ((v-1)/9)*weights[i]; // normalize 1-10 to 0-1
     }
 
-    if (!valid) return null; // transparent for nodata pixels
+    if(!valid) return null;
+    return colorScale(Math.min(10,Math.max(1,Math.round(score*9+1)))).hex();
+  };
 
-    const suitability = Math.min(10, Math.max(1, Math.round(score * 9 + 1)));
-    return colorScale(suitability).hex();
-}
+  // Low-resolution interactive layer
+  lowResLayer = new GeoRasterLayer({
+    georasters,
+    resolution: res, // low for interactivity
+    opacity:0.8,
+    pixelValuesToColorFn: weightedFn
+  });
+  lowResLayer.addTo(map);
 
+  // High-resolution layer (hidden initially)
+  highResLayer = new GeoRasterLayer({
+    georasters,
+    resolution: georasters[0].width, // full raster width ~250m
+    opacity:0.8,
+    pixelValuesToColorFn: weightedFn
   });
 
-  weightedLayer.addTo(map);
-
-  try{
-    const bounds = weightedLayer.getBounds();
-    if(bounds.isValid()) map.fitBounds(bounds);
-  } catch(e){ console.warn("⚠ fitBounds failed:", e); }
-
-  console.log("🎉 Weighted suitability map updated");
+  map.fitBounds(lowResLayer.getBounds());
 }
 
-document.getElementById('updateBtn').addEventListener('click', addWeightedLayer);
+document.getElementById('updateBtn').addEventListener('click',()=>addWeightedLayer(128));
 
 // Legend
 const legend = L.control({position:'bottomright'});
