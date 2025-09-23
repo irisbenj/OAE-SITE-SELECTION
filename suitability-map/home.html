@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weighted Suitability Map Portal</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"/>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f5f7fa;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #007acc;
+    color: #fff;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 2.2rem;
+  }
+
+  header p {
+    margin-top: 0.5rem;
+    font-size: 1.1rem;
+    font-weight: 300;
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 2rem;
+    flex-wrap: wrap;
+    gap: 2rem;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    padding: 2rem;
+    width: 260px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  }
+
+  .card h2 {
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+  }
+
+  .card p {
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+    color: #555;
+  }
+
+  .card a {
+    display: inline-block;
+    padding: 0.6rem 1.2rem;
+    background: #007acc;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  .card a:hover {
+    background: #005fa3;
+  }
+
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    background: #e6e9ee;
+    font-size: 0.9rem;
+    color: #555;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Welcome to the Weighted Suitability Map Portal</h1>
+  <p>Explore environmental suitability layers, compute weighted maps, and determine optimal sites.</p>
+</header>
+
+<main>
+  <div class="card">
+    <h2>View Original Layers</h2>
+    <p>Check the input layers individually: Acid, Logistics, Desalination.</p>
+    <a href="acid_map.html" target="_blank">Acid Layer</a>
+    <a href="log_map.html" target="_blank" style="margin-left: 0.5rem;">Logistics Layer</a>
+    <a href="desal_map.html" target="_blank" style="margin-left: 0.5rem;">Desal Layer</a>
+  </div>
+
+  <div class="card">
+    <h2>Pairwise Comparison Tool</h2>
+    <p>Answer comparison questions to determine recommended weightings for each criterion.</p>
+    <a href="pairwise.html" target="_blank">Open Tool</a>
+  </div>
+
+  <div class="card">
+    <h2>Weighted Suitability Map</h2>
+    <p>Input custom weights for each criterion and generate an interactive suitability map.</p>
+    <a href="weighted_map.html" target="_blank">Open Map</a>
+  </div>
+</main>
+
+<footer>
+  &copy; 2025 Ocean Alkalinity Enhancement Project
+</footer>
+
+</body>
+</html>
