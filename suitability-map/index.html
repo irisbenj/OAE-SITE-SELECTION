@@ -31,14 +31,14 @@
 </div>
 
 <div id="map"></div>
-
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
 <script src="https://unpkg.com/georaster"></script>
 <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
 <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
-<script>
 
+<script>
+// ✅ Define EPSG:9473 projection before parsing rasters
 proj4.defs("EPSG:9473",
   "+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs"
 );
@@ -57,8 +57,6 @@ const rasterFiles = [
 
 let georasters = [];
 let weightedLayer = null;
-
-// discrete 1–10 scale
 const colorScale = chroma.scale("YlGnBu").domain([1, 10]);
 
 // Load rasters
@@ -66,19 +64,21 @@ Promise.all(rasterFiles.map(url => fetch(url)
     .then(r => r.arrayBuffer())
     .then(parseGeoraster)))
 .then(results => {
-    georasters = results;
-    console.log("✅ All rasters loaded");
+    georasters = results.map(r => {
+        r.projection = 9473; // ✅ force projection just in case
+        return r;
+    });
+    console.log("✅ All rasters loaded", georasters);
     document.getElementById('updateBtn').disabled = false;
     addWeightedLayer(); // run once at start
-});
+})
+.catch(err => console.error("❌ Error loading rasters:", err));
 
 // --- NEW FUNCTION: compute weighted raster once ---
 function computeWeightedRaster(georasters, weights) {
-    const [w1, w2, w3] = weights;
     const base = georasters[0];
     const width = base.width;
     const height = base.height;
-
     const newData = new Float32Array(width * height);
 
     for (let i = 0; i < width * height; i++) {
@@ -105,10 +105,17 @@ function computeWeightedRaster(georasters, weights) {
         newData[i] = valid ? score : NaN;
     }
 
-    // return a single georaster object
+    console.log("🧮 Weighted raster stats:",
+        "min =", Math.min(...newData),
+        "max =", Math.max(...newData),
+        "NaN count =", newData.filter(v => isNaN(v)).length
+    );
+
     return {
         ...base,
-        values: [newData]
+        values: [newData],
+        projection: 9473,  // ✅ force CRS
+        noDataValue: NaN
     };
 }
 
@@ -123,11 +130,12 @@ function addWeightedLayer() {
     if(weightedLayer) map.removeLayer(weightedLayer);
 
     const weightedRaster = computeWeightedRaster(georasters, [w1, w2, w3]);
+    console.log("📦 Weighted raster object:", weightedRaster);
 
     weightedLayer = new GeoRasterLayer({
-        georasters: [weightedRaster],  // ✅ only one raster now
+        georasters: [weightedRaster],
         opacity: 0.8,
-        resolution: 512, // bump up for speed
+        resolution: 256, // ✅ safer default for testing
         pixelValuesToColorFn: values => {
             const score = values[0];
             if (isNaN(score)) return null;
@@ -137,7 +145,18 @@ function addWeightedLayer() {
     });
 
     weightedLayer.addTo(map);
-    map.fitBounds(weightedLayer.getBounds());
+
+    try {
+        const bounds = weightedLayer.getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds);
+        } else {
+            console.warn("⚠️ Bounds not valid, skipping fitBounds");
+        }
+    } catch (err) {
+        console.error("❌ Error computing bounds:", err);
+    }
+
     console.log("🎉 Weighted suitability map added/updated");
 }
 
@@ -156,6 +175,7 @@ legend.onAdd = function () {
 };
 legend.addTo(map);
 </script>
+
 
 </body>
 </html>
