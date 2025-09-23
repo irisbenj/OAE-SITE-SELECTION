@@ -2,66 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Pairwise Comparison Tool</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css"/>
+<title>Fuzzy AHP Pairwise Comparison</title>
 <style>
-  body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
-    padding: 0;
-    background: #f5f7fa;
-    color: #333;
-  }
-
-  header {
-    background: #007acc;
-    color: #fff;
-    padding: 1.5rem;
-    text-align: center;
-  }
-
-  header h1 { margin: 0; font-size: 1.8rem; }
-  main { padding: 2rem; max-width: 1000px; margin: auto; }
-
-  table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
-  th, td { padding: 0.8rem; text-align: center; border-bottom: 1px solid #e0e0e0; }
+  body { font-family: sans-serif; padding: 2rem; background: #f5f7fa; color: #333; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 1.5rem; }
+  th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
   th { background: #007acc; color: #fff; }
   td:first-child, td:last-child { text-align: left; font-weight: 500; }
-  select { padding: 0.3rem; border-radius: 4px; border: 1px solid #ccc; width: 100%; }
-  button { background: #007acc; color: #fff; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 500; transition: background 0.2s; }
+  select { padding: 0.2rem; }
+  button { padding: 0.5rem 1rem; background: #007acc; color: #fff; border: none; cursor: pointer; border-radius: 4px; }
   button:hover { background: #005fa3; }
-  #results { margin-top: 1rem; background: #fff; padding: 1rem; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  #results { background: #fff; padding: 1rem; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Pairwise Comparison Tool</h1>
-  <p>Select comparisons to compute normalized weightings for your criteria.</p>
-</header>
+<h1>Fuzzy AHP Pairwise Comparison</h1>
 
-<main>
-  <table id="pairwiseTable">
-    <thead>
-      <tr>
-        <th>Variable A</th>
-        <th>Comparison</th>
-        <th>Variable B</th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- rows will be generated automatically -->
-    </tbody>
-  </table>
+<table id="pairwiseTable">
+  <thead>
+    <tr><th>Variable A</th><th>Comparison</th><th>Variable B</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-  <button id="computeBtn">Compute Weightings</button>
+<button id="computeBtn">Compute Normalized Weights</button>
 
-  <div id="results">
-    <p>Normalized weights will appear here.</p>
-  </div>
-</main>
+<div id="results"><p>Weights will appear here.</p></div>
 
 <script>
+// --- Variables & TFNs ---
 const variables = [
   "Logistics", 
   "Energy Cost", 
@@ -72,36 +42,29 @@ const variables = [
   "Distance from the Coast"
 ];
 
-const scaleOptions = [
-  {value: 1, label: "Extremely Important"}, 
-  {value: 2, label: ""}, 
-  {value: 3, label: "Very Strongly Important"}, 
-  {value: 4, label: ""}, 
-  {value: 5, label: "Strongly Important"}, 
-  {value: 6, label: ""}, 
-  {value: 7, label: "Slightly Important"}, 
-  {value: 8, label: ""}, 
-  {value: 9, label: "Equal"}, 
-  {value: 10, label: ""}, 
-  {value: 11, label: "Slightly Important"}, 
-  {value: 12, label: ""}, 
-  {value: 13, label: "Strongly Important"}, 
-  {value: 14, label: ""}, 
-  {value: 15, label: "Very Strongly Important"}, 
-  {value: 16, label: ""}, 
-  {value: 17, label: "Extremely Important"}
-];
+// TFN mapping for Saaty scale (1-9, 1: extremely less, 9: equal, adjust as needed)
+const saatyTFN = {
+  1: [1,1,1],
+  2: [1,2,3],
+  3: [2,3,4],
+  4: [3,4,5],
+  5: [4,5,6],
+  6: [5,6,7],
+  7: [6,7,8],
+  8: [7,8,9],
+  9: [9,9,9]
+};
 
-// --- generate pairwise rows ---
+// --- generate pairwise table ---
 const tbody = document.querySelector('#pairwiseTable tbody');
-for (let i = 0; i < variables.length; i++) {
-  for (let j = i + 1; j < variables.length; j++) {
+for(let i=0;i<variables.length;i++){
+  for(let j=i+1;j<variables.length;j++){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${variables[i]}</td>
       <td>
         <select>
-          ${scaleOptions.map(opt => `<option value="${opt.value}" ${opt.value===9?'selected':''}>${opt.label}</option>`).join('')}
+          ${Object.keys(saatyTFN).map(k => `<option value="${k}" ${k==9?'selected':''}>${k}</option>`).join('')}
         </select>
       </td>
       <td>${variables[j]}</td>
@@ -110,36 +73,36 @@ for (let i = 0; i < variables.length; i++) {
   }
 }
 
-// --- compute normalized weights ---
-document.getElementById('computeBtn').addEventListener('click', () => {
-  const n = variables.length;
-  const matrix = Array.from({length: n}, () => Array(n).fill(1));
+// --- fuzzy arithmetic helpers ---
+function multiplyTFN(a,b){ return [a[0]*b[0], a[1]*b[1], a[2]*b[2]]; }
+function reciprocalTFN(a){ return [1/a[2],1/a[1],1/a[0]]; }
+function defuzzify(a){ return (a[0]+a[1]+a[2])/3; }
 
+// --- compute weights ---
+document.getElementById('computeBtn').addEventListener('click',()=>{
+  const n = variables.length;
+  const matrix = Array.from({length:n},()=>Array(n).fill([1,1,1]));
   const rows = Array.from(document.querySelectorAll('#pairwiseTable tbody tr'));
-  let k = 0;
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
+  let k=0;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
       const val = parseInt(rows[k].querySelector('select').value);
-      // scale to AHP reciprocal (1-17 → 1/9 to 9)
-      const ahpValue = val < 9 ? 1 / (9 - val + 1) : val > 9 ? val - 8 : 1;
-      matrix[i][j] = ahpValue;
-      matrix[j][i] = 1 / ahpValue;
+      const tfn = saatyTFN[val];
+      matrix[i][j] = tfn;
+      matrix[j][i] = reciprocalTFN(tfn);
       k++;
     }
   }
 
-  // --- compute normalized weights (sum of rows, normalize) ---
-  const rowSums = matrix.map(row => row.reduce((a,b)=>a+b,0));
-  const colSums = matrix[0].map((_, col) => matrix.reduce((sum, row) => sum + row[col], 0));
-  const normalizedMatrix = matrix.map((row, i) => row.map((val, j) => val / colSums[j]));
-  const weights = normalizedMatrix.map(row => row.reduce((a,b)=>a+b,0)/n);
+  // --- defuzzify each row sum and normalize ---
+  const rowSums = matrix.map(row => row.reduce((a,b)=>a+defuzzify(b),0));
+  const total = rowSums.reduce((a,b)=>a+b,0);
+  const weights = rowSums.map(s=>s/total);
 
-  // display results
+  // display
   let html = '<h3>Normalized Weights</h3><ul>';
-  variables.forEach((v,i)=>{
-    html += `<li>${v}: ${(weights[i]*100).toFixed(1)}%</li>`;
-  });
-  html += '</ul>';
+  variables.forEach((v,i)=>html+=`<li>${v}: ${(weights[i]*100).toFixed(1)}%</li>`);
+  html+='</ul>';
   document.getElementById('results').innerHTML = html;
 });
 </script>
