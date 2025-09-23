@@ -31,6 +31,7 @@
 </div>
 
 <div id="map"></div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
 <script src="https://unpkg.com/georaster"></script>
@@ -38,7 +39,7 @@
 <script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
 
 <script>
-// ✅ Define EPSG:9473 projection before parsing rasters
+// --- Setup ---
 proj4.defs("EPSG:9473",
   "+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs"
 );
@@ -59,83 +60,88 @@ let georasters = [];
 let weightedLayer = null;
 const colorScale = chroma.scale("YlGnBu").domain([1, 10]);
 
-// Load rasters
+// --- Load rasters ---
 Promise.all(rasterFiles.map(url => fetch(url)
     .then(r => r.arrayBuffer())
     .then(parseGeoraster)))
 .then(results => {
-    georasters = results.map(r => {
-        r.projection = 9473; // ✅ force projection just in case
-        return r;
-    });
+    georasters = results.map(r => { r.projection = 9473; return r; });
     console.log("✅ All rasters loaded", georasters);
     document.getElementById('updateBtn').disabled = false;
-    addWeightedLayer(); // run once at start
+    addWeightedLayer(); // run at start
 })
 .catch(err => console.error("❌ Error loading rasters:", err));
 
-// --- NEW FUNCTION: compute weighted raster once ---
-function computeWeightedRaster(georasters, weights) {
+// --- Chunked weighted raster calculation ---
+async function computeWeightedRasterChunked(georasters, weights, chunkSize = 10000) {
     const base = georasters[0];
-    const width = base.width;
-    const height = base.height;
-    const newData = new Float32Array(width * height);
+    const total = base.width * base.height;
+    const newData = base.values[0]; // reuse array in-place
+    const numRasters = georasters.length;
 
-    for (let i = 0; i < width * height; i++) {
-        let score = 0;
-        let valid = true;
+    console.log(`Processing ${total} pixels in chunks of ${chunkSize}...`);
 
-        for (let j = 0; j < georasters.length; j++) {
-            const raster = georasters[j];
-            const v = raster.values[0][i];
-            const nodata = raster.noDataValue ?? 0;
+    for (let startIdx = 0; startIdx < total; startIdx += chunkSize) {
+        const endIdx = Math.min(startIdx + chunkSize, total);
 
-            if (v === nodata || isNaN(v)) {
-                valid = false;
-                break;
+        for (let i = startIdx; i < endIdx; i++) {
+            let score = 0;
+            let valid = true;
+
+            for (let j = 0; j < numRasters; j++) {
+                const raster = georasters[j];
+                const v = raster.values[0][i];
+                const nodata = raster.noDataValue ?? 0;
+
+                if (v === nodata || isNaN(v)) {
+                    valid = false;
+                    break;
+                }
+
+                const min = raster.mins[0];
+                const max = raster.maxs[0];
+                if (min === max) { valid = false; break; }
+
+                score += ((v - min) / (max - min)) * weights[j];
             }
 
-            const min = raster.mins[0];
-            const max = raster.maxs[0];
-            if (min === max) { valid = false; break; }
-
-            score += ((v - min) / (max - min)) * weights[j];
+            newData[i] = valid ? score : NaN;
         }
 
-        newData[i] = valid ? score : NaN;
+        // yield to browser
+        await new Promise(r => setTimeout(r, 0));
+
+        if (startIdx % (chunkSize * 50) === 0) {
+            console.log(`Processed ${endIdx} / ${total}`);
+        }
     }
 
-    console.log("🧮 Weighted raster stats:",
-        "min =", Math.min(...newData),
-        "max =", Math.max(...newData),
-        "NaN count =", newData.filter(v => isNaN(v)).length
-    );
+    console.log("✅ Weighted raster chunked processing complete");
 
     return {
         ...base,
         values: [newData],
-        projection: 9473,  // ✅ force CRS
+        projection: 9473,
         noDataValue: NaN
     };
 }
 
 // --- Build/update suitability layer ---
-function addWeightedLayer() {
+async function addWeightedLayer() {
     const w1 = parseFloat(document.getElementById('w1').value) / 100;
     const w2 = parseFloat(document.getElementById('w2').value) / 100;
     const w3 = parseFloat(document.getElementById('w3').value) / 100;
-    const sum = w1+w2+w3;
-    if(sum !== 1) { alert("Weights must sum to 100%"); return; }
+    const sum = w1 + w2 + w3;
+    if (sum !== 1) { alert("Weights must sum to 100%"); return; }
 
-    if(weightedLayer) map.removeLayer(weightedLayer);
+    if (weightedLayer) map.removeLayer(weightedLayer);
 
-    const weightedRaster = computeWeightedRaster(georasters, [w1, w2, w3]);
-    console.log("📦 Weighted raster object:", weightedRaster);
+    const weightedRaster = await computeWeightedRasterChunked(georasters, [w1, w2, w3]);
 
     weightedLayer = new GeoRasterLayer({
         georasters: [weightedRaster],
         opacity: 0.8,
-        resolution: 256, // ✅ safer default for testing
+        resolution: 256,
         pixelValuesToColorFn: values => {
             const score = values[0];
             if (isNaN(score)) return null;
@@ -148,22 +154,18 @@ function addWeightedLayer() {
 
     try {
         const bounds = weightedLayer.getBounds();
-        if (bounds.isValid()) {
-            map.fitBounds(bounds);
-        } else {
-            console.warn("⚠️ Bounds not valid, skipping fitBounds");
-        }
+        if (bounds.isValid()) map.fitBounds(bounds);
     } catch (err) {
-        console.error("❌ Error computing bounds:", err);
+        console.warn("⚠️ fitBounds failed:", err);
     }
 
     console.log("🎉 Weighted suitability map added/updated");
 }
 
-// Button
+// --- Button ---
 document.getElementById('updateBtn').addEventListener('click', addWeightedLayer);
 
-// Legend
+// --- Legend ---
 const legend = L.control({position: 'bottomright'});
 legend.onAdd = function () {
     const div = L.DomUtil.create('div', 'legend');
@@ -175,7 +177,5 @@ legend.onAdd = function () {
 };
 legend.addTo(map);
 </script>
-
-
 </body>
 </html>
