@@ -35,6 +35,8 @@
   <h2>Normalized Weights</h2>
   <ul id="weightsList"></ul>
 </div>
+<a href="#" id="openMapLink" style="display:none; margin-top:10px;">Open Map With These Weights</a>
+
 
 <script>
 // --- Your criteria
@@ -126,16 +128,29 @@ document.getElementById("computeBtn").addEventListener("click", ()=>{
   // defuzzify using (l+m+u)/3
   const defuzzified = normalized.map(([l,m,u])=>(l+m+u)/3);
 
+    // Build the URL with query parameters for the map page
+  const wParams = defuzzified.map(w => (w*100).toFixed(1)); // percentages
+  const mapUrl = `map.html?w1=${wParams[0]}&w2=${wParams[1]}&w3=${wParams[2]}&w4=${wParams[3]}&w5=${wParams[4]}&w6=${wParams[5]}&w7=${wParams[6]}`;
+
+  // Update the link
+  const link = document.getElementById("openMapLink");
+  link.href = mapUrl;
+  link.style.display = "inline-block";
+  link.textContent = "Open Map With These Weights";
+
+
   // display results
   const ul = document.getElementById("weightsList");
   ul.innerHTML = "";
   variables.forEach((v,i)=>{
-    const w = defuzzified[i].toFixed(3);
+    const w = (defuzzified[i]*100).toFixed(3);
     const li = document.createElement("li");
-    li.textContent = `${v}: ${w*100}%`;
+    li.textContent = `${v}: ${w}%`;
     ul.appendChild(li);
   });
 });
+
+
 </script>
 </body>
 </html>

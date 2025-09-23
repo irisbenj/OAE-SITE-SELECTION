@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Weighted Suitability Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+  body { font-family:sans-serif; margin:0; padding:0; text-align:center;}
+  #map { width: 1000px; height:700px; margin:10px auto;}
+  .input-container { margin:10px; }
+  input { width:60px; margin-right:5px; }
+  .legend { background:white; padding:6px; line-height:1.4em; border-radius:5px; }
+  .legend i { width:20px; height:12px; float:left; margin-right:8px; opacity:0.8; }
+</style>
+</head>
+<body>
+<h1>Weighted Suitability Map</h1>
+
+<div class="input-container">
+  Acid: <input type="number" id="w1" value="33"> %
+  Logistics: <input type="number" id="w2" value="33"> %
+  Desal: <input type="number" id="w3" value="34"> %
+  <button id="updateBtn" disabled>Update Map</button>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+<script src="https://unpkg.com/georaster"></script>
+<script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+<script src="https://unpkg.com/chroma-js@2.1.0/chroma.min.js"></script>
+
+<script>
+proj4.defs("EPSG:9473","+proj=aea +lat_0=0 +lon_0=132 +lat_1=-18 +lat_2=-36 +x_0=0 +y_0=0 +datum=GDA2020 +units=m +no_defs");
+
+// --- Read weights from URL query parameters ---
+const params = new URLSearchParams(window.location.search);
+document.getElementById('w1').value = params.get('w1') ?? 33;
+document.getElementById('w2').value = params.get('w2') ?? 33;
+document.getElementById('w3').value = params.get('w3') ?? 34;
+
+const map = L.map('map').setView([-25, 135], 4);
+L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.stadiamaps.com/">Stadia Maps</a> contributors'
+}).addTo(map);
+
+const rasterFiles = [
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/acid-cog.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/log-cog.tif',
+  'https://irisbenj.github.io/OAE-SITE-SELECTION/suitability-map/desal-cog.tif'
+];
+
+let georasters = [];
+let lowResLayer = null;
+let highResLayer = null;
+const colorScale = chroma.scale("YlGnBu").domain([1,10]);
+
+Promise.all(rasterFiles.map(url => fetch(url).then(r => r.arrayBuffer()).then(parseGeoraster)))
+.then(results => {
+  georasters = results.map(r => { r.projection=9473; return r; });
+  console.log("✅ All rasters loaded");
+  document.getElementById('updateBtn').disabled=false;
+  addWeightedLayer(128); // initial low-res layer
+}).catch(err => console.error("❌ Error loading rasters:",err));
+
+// Function to build/update weighted layer
+function addWeightedLayer(res=128){
+  const w1=parseFloat(document.getElementById('w1').value)/100;
+  const w2=parseFloat(document.getElementById('w2').value)/100;
+  const w3=parseFloat(document.getElementById('w3').value)/100;
+  const sum=w1+w2+w3;
+  if(sum!==1){alert("Weights must sum to 100%"); return;}
+
+  // Remove old layers
+  if(lowResLayer) map.removeLayer(lowResLayer);
+  if(highResLayer) map.removeLayer(highResLayer);
+
+  const weightedFn = values => {
+    let valid = true;
+    let score = 0;
+    const weights = [w1,w2,w3];
+
+    for(let i=0;i<values.length;i++){
+      const v = values[i];
+      const raster = georasters[i];
+      const nodata = raster.noDataValue ?? null;
+
+      if(v==null||isNaN(v)||(nodata!==null&&v===nodata)){ valid=false; break; }
+
+      score += ((v-1)/9)*weights[i]; // normalize 1-10 to 0-1
+    }
+
+    if(!valid) return null;
+    return colorScale(Math.min(10,Math.max(1,Math.round(score*9+1)))).hex();
+  };
+
+  // Low-resolution interactive layer
+  lowResLayer = new GeoRasterLayer({
+    georasters,
+    resolution: res, // low for interactivity
+    opacity:0.8,
+    pixelValuesToColorFn: weightedFn
+  });
+  lowResLayer.addTo(map);
+
+  // High-resolution layer (hidden initially)
+  highResLayer = new GeoRasterLayer({
+    georasters,
+    resolution: georasters[0].width, // full raster width ~250m
+    opacity:0.8,
+    pixelValuesToColorFn: weightedFn
+  });
+
+  map.fitBounds(lowResLayer.getBounds());
+}
+
+document.getElementById('updateBtn').addEventListener('click',()=>addWeightedLayer(128));
+
+// Legend
+const legend = L.control({position:'bottomright'});
+legend.onAdd = function(){
+  const div=L.DomUtil.create('div','legend');
+  div.innerHTML="<b>Suitability (1–10)</b><br>";
+  for(let i=1;i<=10;i++){
+    div.innerHTML+=`<i style="background:${colorScale(i).hex()}"></i> ${i}<br>`;
+  }
+  return div;
+};
+legend.addTo(map);
+</script>
+</body>
+</html>
